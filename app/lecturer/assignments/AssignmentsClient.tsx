@@ -139,7 +139,8 @@ export default function AssignmentsClient({ initialAssignments }: { initialAssig
           startDate: form.startDate,
           endDate: form.endDate || undefined,
           priority: form.priority,
-          fileMeta: form.fileMeta
+          fileMeta: form.fileMeta,
+          file: form.file
         };
 
         // Optimistic UI

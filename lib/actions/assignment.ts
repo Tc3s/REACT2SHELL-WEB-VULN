@@ -95,7 +95,7 @@ export async function createAssignment(data: any) {
     throw new Error("Forbidden: Only lecturers can create assignments.");
   }
 
-  const { title, dueDate, dueTime, ...meta } = data
+  const { title, dueDate, dueTime, file, ...meta } = data
 
   const baseMetadata = Object.create(null) as Record<string, any>;
   Object.assign(baseMetadata, { systemGenerated: true, dueTime });
