@@ -9,7 +9,7 @@ type PageParams = { courseId: string; assignmentId: string };
 export default async function CourseAssignmentWorkspaceRoute({
   params,
 }: {
-  params: PageParams | Promise<PageParams>;
+  params: Promise<PageParams>;
 }) {
   const { courseId, assignmentId } = await params;
   const course = getCourseById(courseId);

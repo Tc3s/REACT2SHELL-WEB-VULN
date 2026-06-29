@@ -8,7 +8,7 @@ type PageParams = { courseId: string; noteId: string };
 export default async function CourseNoteRoute({
   params,
 }: {
-  params: PageParams | Promise<PageParams>;
+  params: Promise<PageParams>;
 }) {
   const { courseId, noteId } = await params;
   const course = getCourseById(courseId);

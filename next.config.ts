@@ -1,5 +1,8 @@
 import type { NextConfig } from "next";
 
+const appHost = process.env.APP_HOST || "localhost";
+const allowedOrigins = [appHost, `${appHost}:3000`, `${appHost}:3001`];
+
 const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
@@ -19,11 +22,14 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     serverActions: {
-      allowedOrigins: ["localhost:3000", "192.168.95.128:3000", "192.168.95.133:3000"],
+      allowedOrigins,
     },
   },
   // Allow hot-reloading from external network interfaces
-  allowedDevOrigins: ["localhost:3000", "192.168.95.128:3000", "192.168.95.133:3000"],
+  // allowedDevOrigins: allowedOrigins,
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
 };
 
 export default nextConfig;

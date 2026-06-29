@@ -8,7 +8,7 @@ type PageParams = { assignmentId: string };
 export default async function AssignmentWorkspaceFallbackRoute({
   params,
 }: {
-  params: PageParams | Promise<PageParams>;
+  params: Promise<PageParams>;
 }) {
   const { assignmentId } = await params;
   const workspace = getAssignmentWorkspaceById(assignmentId);

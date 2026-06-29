@@ -10,7 +10,7 @@ type Params = {
 export default async function ResourceDetailRoute({
   params,
 }: {
-  params: Params | Promise<Params>;
+  params: Promise<Params>;
 }) {
   const { resourceId } = await params;
   const resource = MOCK_RESOURCES.find((item) => item.id === resourceId);

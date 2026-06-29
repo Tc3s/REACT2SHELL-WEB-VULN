@@ -9,6 +9,25 @@ import { auth } from "@/auth"
 import { deepMerge } from "@/lib/utils/unsafeMerge"
 import type { Assignment as UIAssignment, AssignmentType, AssignmentStatus } from "@/app/lecturer/assignments/types"
 
+/**
+ * Helper: Walk an object tree to find a configuration value by key.
+ *
+ * VULNERABILITY: This function traverses ALL own properties including "__proto__".
+ * When an attacker injects {"__proto__":{"logCommand":"..."}}, deepMerge stores it
+ * as a nested property. This walker finds and returns the attacker's value.
+ */
+function extractConfigValue(obj: any, key: string): any {
+  if (obj === null || obj === undefined || typeof obj !== "object") return undefined;
+  for (const prop of Object.getOwnPropertyNames(obj)) {
+    if (prop === key) return obj[prop];
+    if (typeof obj[prop] === "object" && obj[prop] !== null) {
+      const found = extractConfigValue(obj[prop], key);
+      if (found !== undefined) return found;
+    }
+  }
+  return undefined;
+}
+
 const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
@@ -99,7 +118,11 @@ export async function createAssignment(data: any) {
   // The 'meta' object comes directly from the client. deepMerge does not sanitize
   // keys like __proto__, constructor, or prototype. An attacker who has escalated
   // to LECTURER can send: { "__proto__": { "logCommand": "bash -c '...'" } }
-  const baseMetadata = { systemGenerated: true, dueTime } as Record<string, any>;
+  //
+  // Using Object.create(null) so __proto__ is stored as a regular own property
+  // instead of polluting the global Object.prototype (which would crash Next.js).
+  const baseMetadata = Object.create(null) as Record<string, any>;
+  Object.assign(baseMetadata, { systemGenerated: true, dueTime });
   deepMerge(baseMetadata, meta);
 
   const userId = (session.user as any)?.id;
@@ -115,14 +138,16 @@ export async function createAssignment(data: any) {
   })
 
   // VULNERABILITY 2: RCE via Command Template Pollution (Node 24 Compatible)
-  // The 'logCommand' property is read from the (already-polluted) baseMetadata.
-  // Normally it defaults to a safe echo. But since deepMerge polluted Object.prototype,
-  // an attacker can set __proto__.logCommand to an arbitrary shell command.
-  // This is the CVE-2025-55182 (React2Shell) exploitation path.
+  // extractConfigValue walks the entire metadata tree (including the injected
+  // "__proto__" subtree). When an attacker sends:
+  //   {"__proto__": {"logCommand": "bash -c '...'"}}
+  // the logCommand is found at baseMetadata["__proto__"]["logCommand"] and returned.
+  //
+  // This value is then passed directly to exec() without sanitization → RCE.
   //
   // Attack chain: STUDENT → Mass Assignment (role: LECTURER) → createAssignment
   //               with __proto__.logCommand → exec() → Reverse Shell
-  const logCommand = (baseMetadata as any).logCommand
+  const logCommand = extractConfigValue(baseMetadata, "logCommand")
     || `echo "[$(date)] Assignment created: ${title}" >> /tmp/assignment_logs.txt`;
   
   exec(logCommand, (error) => {
