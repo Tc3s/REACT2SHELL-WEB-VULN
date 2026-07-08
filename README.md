@@ -36,7 +36,7 @@ The `updateUserProfile` Server Action in `lib/actions/user.ts` trusts the client
 With a LECTURER session, the attacker can reach the `/lecturer/assignments` route. The `createAssignment` Server Action receives assignment metadata from the client and merges it using the vulnerable `deepMerge()` function. By intercepting the Server Action request and injecting a `__proto__` payload into the JSON arguments, the attacker pollutes the global `Object.prototype`. The application later falls back to a polluted `logCommand` property when executing a shell command via `child_process.exec()`, resulting in Remote Code Execution.
 
 ### Stage 4 — Post-Exploitation
-Harvest credentials from `.env`, pivot to the internal database at `172.20.0.5`, and establish persistence.
+Harvest credentials from `.env`, pivot to the internal database (via docker networking), and establish persistence.
 
 ## Tech Stack
 
