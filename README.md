@@ -92,7 +92,7 @@ lib/
 
 ```bash
 # 1. Clone the repository
-git clone <repo-url> && cd e-learning-ui
+git clone https://github.com/Tc3s/REACT2SHELL-WEB-VULN && cd REACT2SHELL-WEB-VULN
 
 # 2. Install dependencies (You might see warnings due to the vulnerable React version - this is expected)
 npm install --legacy-peer-deps
