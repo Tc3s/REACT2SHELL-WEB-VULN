@@ -95,7 +95,7 @@ lib/
 git clone <repo-url> && cd e-learning-ui
 
 # 2. Install dependencies (You might see warnings due to the vulnerable React version - this is expected)
-npm install
+npm install --legacy-peer-deps
 
 # 3. Start PostgreSQL (via docker-compose)
 docker compose up -d
