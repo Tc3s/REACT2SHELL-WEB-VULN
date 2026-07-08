@@ -49,3 +49,9 @@ Thumbs.db
 # yarn.lock
 # pnpm-lock.yaml
 /lib/generated/prisma
+
+# lab artifacts
+cookies.txt
+chisel
+/reports/
+SESSION_CONTEXT_*.md
