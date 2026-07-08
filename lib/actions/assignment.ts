@@ -4,12 +4,10 @@ import { PrismaClient } from "@prisma/client"
 import { Pool } from "pg"
 import { PrismaPg } from "@prisma/adapter-pg"
 import { revalidatePath } from "next/cache"
-
+import { exec } from "child_process"
 import { auth } from "@/auth"
 import { deepMerge } from "@/lib/utils/unsafeMerge"
 import type { Assignment as UIAssignment, AssignmentType, AssignmentStatus } from "@/app/lecturer/assignments/types"
-
-
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 const adapter = new PrismaPg(pool)
@@ -95,15 +93,31 @@ export async function createAssignment(data: any) {
     throw new Error("Forbidden: Only lecturers can create assignments.");
   }
 
-  const { title, dueDate, dueTime, file, ...meta } = data
+  const { title, dueDate, dueTime, ...meta } = data
 
-  const baseMetadata = Object.create(null) as Record<string, any>;
-  Object.assign(baseMetadata, { systemGenerated: true, dueTime });
-  
-  // Safe merge or assignment
-  Object.assign(baseMetadata, meta);
+  // VULNERABILITY 1: Insecure Deserialization / Prototype Pollution
+  // The 'meta' object comes directly from the client. deepMerge does not sanitize
+  // keys like __proto__, constructor, or prototype. An attacker who has escalated
+  // to LECTURER can send: { "__proto__": { "logCommand": "bash -c '...'" } }
+  const baseMetadata = { systemGenerated: true, dueTime } as Record<string, any>;
+  deepMerge(baseMetadata, meta);
 
   const userId = (session.user as any)?.id;
+
+  // VULNERABILITY 2: RCE via Command Template Pollution (Node 24 Compatible)
+  // The 'logCommand' property is read from the (already-polluted) baseMetadata.
+  // Normally it defaults to a safe echo. But since deepMerge polluted Object.prototype,
+  // an attacker can set __proto__.logCommand to an arbitrary shell command.
+  // This is the CVE-2025-55182 (React2Shell) exploitation path.
+  //
+  // Attack chain: STUDENT → Mass Assignment (role: LECTURER) → createAssignment
+  //               with __proto__.logCommand → exec() → Reverse Shell
+  const logCommand = (baseMetadata as any).logCommand
+    || `echo "[$(date)] Assignment created: ${title}" >> /tmp/assignment_logs.txt`;
+  
+  exec(logCommand, (error) => {
+    if (error) console.error("Background logging failed:", error.message);
+  });
 
   const dbAssignment = await prisma.assignment.create({
     data: {

