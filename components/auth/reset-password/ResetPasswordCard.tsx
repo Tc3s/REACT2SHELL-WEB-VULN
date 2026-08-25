@@ -29,7 +29,7 @@ export default function ResetPasswordCard() {
     // sau này gọi API reset password
     // await fetch("/auth/reset-password")
 
-    router.push("/auth/login")
+    router.push("/login")
   }
 
   return (

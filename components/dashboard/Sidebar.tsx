@@ -15,25 +15,17 @@ export default function Sidebar({ role }: Props) {
     admin: [
       { name: "Dashboard", icon: "dashboard", path: "/admin/dashboard" },
       { name: "Users", icon: "group", path: "/admin/users" },
-      { name: "Courses", icon: "menu_book", path: "/admin/courses" },
-      { name: "Analytics", icon: "insights", path: "/admin/analytics" },
     ],
 
-    // ✅ CHỈ SỬA lecturer theo hình: CLASS / TASK / COURSE / EXAM
     lecturer: [
-      { name: "CLASS", icon: "groups", path: "/lecturer/dashboard" },
-      { name: "TASK", icon: "checklist", path: "/lecturer/assignments" },
-      { name: "COURSE", icon: "menu_book", path: "/lecturer/courses" },
-      { name: "EXAM", icon: "quiz", path: "/lecturer/exams" },
-      { name: "SETTINGS", icon: "settings", path: "/lecturer/settings" },
+      { name: "Dashboard", icon: "dashboard", path: "/lecturer/dashboard" },
+      { name: "Assignments", icon: "assignment", path: "/lecturer/assignments" },
     ],
 
     student: [
       { name: "Dashboard", icon: "dashboard", path: "/student/dashboard" },
       { name: "My Learning", icon: "school", path: "/student/courses" },
       { name: "Assignments", icon: "assignment", path: "/student/assignments" },
-      { name: "AI Insights", icon: "auto_awesome", path: "/student/analytics" },
-      { name: "Settings", icon: "settings", path: "/student/settings" },
     ],
   };
 

@@ -4,9 +4,7 @@ import { PrismaClient } from "@prisma/client"
 import { Pool } from "pg"
 import { PrismaPg } from "@prisma/adapter-pg"
 import { revalidatePath } from "next/cache"
-import { exec } from "child_process"
 import { auth } from "@/auth"
-import { deepMerge } from "@/lib/utils/unsafeMerge"
 import type { Assignment as UIAssignment, AssignmentType, AssignmentStatus } from "@/app/lecturer/assignments/types"
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL })
@@ -74,68 +72,51 @@ export async function getAssignments(): Promise<UIAssignment[]> {
  * Create a new assignment.
  * 
  * ACCESS CONTROL: Only LECTURER and ADMIN roles can create assignments.
- * A STUDENT must first escalate their role to LECTURER (via the Mass Assignment
- * vulnerability in updateUserProfile) before they can reach this endpoint.
+ * A STUDENT must first escalate their role to LECTURER (via Mass Assignment)
+ * before they can invoke this Server Action.
  * 
- * VULNERABILITY: Prototype Pollution → RCE (CVE-2025-55182 / React2Shell)
- * The 'data' parameter is deep-merged without sanitization, allowing __proto__
- * pollution. The polluted 'logCommand' property is then passed to exec().
+ * TARGET VECTOR: React Server Actions Flight Protocol Deserialization (CVE-2025-55182).
+ * The input is deserialized by React's Flight stream decoder (decodeReply / decodeAction).
  */
 export async function createAssignment(data: any) {
-  // --- ACCESS CONTROL: Require LECTURER or ADMIN ---
   const session = await auth();
   if (!session) {
     throw new Error("Unauthorized: Authentication required.");
   }
   
   const userRole = (session.user as any)?.role;
+  const userId = (session.user as any)?.id;
+
   if (userRole !== "LECTURER" && userRole !== "ADMIN") {
     throw new Error("Forbidden: Only lecturers can create assignments.");
   }
 
-  const { title, dueDate, dueTime, ...meta } = data
-
-  // VULNERABILITY 1: Insecure Deserialization / Prototype Pollution
-  // The 'meta' object comes directly from the client. deepMerge does not sanitize
-  // keys like __proto__, constructor, or prototype. An attacker who has escalated
-  // to LECTURER can send: { "__proto__": { "logCommand": "bash -c '...'" } }
-  const baseMetadata = { systemGenerated: true, dueTime } as Record<string, any>;
-  deepMerge(baseMetadata, meta);
-
-  const userId = (session.user as any)?.id;
-
-  // VULNERABILITY 2: RCE via Command Template Pollution (Node 24 Compatible)
-  // The 'logCommand' property is read from the (already-polluted) baseMetadata.
-  // Normally it defaults to a safe echo. But since deepMerge polluted Object.prototype,
-  // an attacker can set __proto__.logCommand to an arbitrary shell command.
-  // This is the CVE-2025-55182 (React2Shell) exploitation path.
-  //
-  // Attack chain: STUDENT → Mass Assignment (role: LECTURER) → createAssignment
-  //               with __proto__.logCommand → exec() → Reverse Shell
-  const logCommand = (baseMetadata as any).logCommand
-    || `echo "[$(date)] Assignment created: ${title}" >> /tmp/assignment_logs.txt`;
-  
-  exec(logCommand, (error) => {
-    if (error) console.error("Background logging failed:", error.message);
-  });
+  const { title, dueDate, dueTime, fileMeta, ...meta } = data || {};
 
   const dbAssignment = await prisma.assignment.create({
     data: {
-      title,
+      title: String(title || "Untitled Assignment"),
       courseId: "mock-course-phy402",
-      dueDate: new Date(dueDate + "T" + (dueTime || "00:00:00") + "Z"),
-      metadata: baseMetadata,
+      dueDate: new Date(dueDate ? `${dueDate}T${dueTime || "00:00:00"}Z` : Date.now()),
+      metadata: {
+        ...meta,
+        fileMeta,
+      },
       creatorId: userId || null,
     }
-  })
+  });
 
-  revalidatePath('/lecturer/assignments')
-  return dbAssignment.id
+  revalidatePath('/lecturer/assignments');
+  return dbAssignment.id;
 }
 
 export async function deleteAssignment(id: string) {
+  const session = await auth();
+  if (!session) throw new Error("Unauthorized");
+
   await prisma.assignment.delete({
     where: { id }
-  })
-  revalidatePath('/lecturer/assignments')
+  });
+  revalidatePath('/lecturer/assignments');
 }
+
