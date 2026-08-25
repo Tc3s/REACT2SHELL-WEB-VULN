@@ -100,23 +100,6 @@ Truy cập ứng dụng tại: `http://localhost:3000`.
 
 ---
 
-## ⚡ Công Cụ Khai Thác Tự Động Hóa (Exploit Harness)
-
-Dự án cung cấp sẵn script Python tự động hóa toàn bộ chuỗi tấn công 4 giai đoạn end-to-end:
-
-```bash
-# Chạy chuỗi khai thác hoàn chỉnh với lệnh mặc định (id && uname -a)
-python3 scripts/exploit_react2shell.py --target http://localhost:3000
-
-# Chạy lệnh tùy chỉnh trên máy chủ mục tiêu
-python3 scripts/exploit_react2shell.py --target http://localhost:3000 --cmd "cat /etc/passwd"
-
-# Chuyển tiếp lưu lượng qua proxy Burp Suite để phân tích gói tin
-python3 scripts/exploit_react2shell.py --target http://localhost:3000 --proxy http://127.0.0.1:8080
-```
-
----
-
 ## 📖 Tài Liệu Hướng Dẫn Chi Tiết
 
 - **[Tài liệu Walkthrough Chi Tiết Từng Bước (Lab_Walkthrough.md)](Lab_Walkthrough.md)**: Hướng dẫn khai thác thủ công bằng lệnh `curl`, phân tích cấu trúc gói tin HTTP và Flight payload.
