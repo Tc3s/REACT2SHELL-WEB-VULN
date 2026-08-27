@@ -45,6 +45,10 @@ log_error() {
 # Helper to run commands with sudo if needed
 run_sudo() {
     if [ "$(id -u)" -eq 0 ]; then
+        # When already root, ignore sudo-specific flags like -E or -H
+        while [[ "$1" == -* && "$1" != "--" ]]; do
+            shift
+        done
         "$@"
     elif command -v sudo &> /dev/null; then
         sudo "$@"
@@ -83,7 +87,7 @@ install_missing_dependencies() {
         # 3. Node.js 20.x LTS & NPM
         if ! command -v node &> /dev/null || [ "$(node -v | cut -d'.' -f1 | tr -d 'v')" -lt 18 ]; then
             log_info "Đang cài đặt Node.js 20.x LTS từ NodeSource..."
-            curl -fsSL https://deb.nodesource.com/setup_20.x | run_sudo -E bash -
+            curl -fsSL https://deb.nodesource.com/setup_20.x | run_sudo bash -
             run_sudo apt-get install -y -qq nodejs
             log_success "Đã cài đặt Node.js $(node -v) & NPM $(npm -v)!"
         fi
@@ -302,6 +306,12 @@ main() {
     detect_lan_ip
     setup_environment
     start_services_and_seed
+
+    # Fix ownership if script was executed via sudo
+    if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
+        chown -R "$SUDO_USER:$(id -gn "$SUDO_USER")" . 2>/dev/null || true
+    fi
+
     print_summary
 }
 
