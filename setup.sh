@@ -213,10 +213,9 @@ reset_database_state() {
 }
 
 start_services_and_seed() {
-    log_info "Khởi động toàn bộ Stack dịch vụ Enterprise qua Docker Compose (Nginx + Web + DB + Decoys)..."
+    log_info "Khởi động toàn bộ Stack dịch vụ Enterprise (Nginx, Web App, Database & Cổng Decoys)..."
     
-    # Khởi động sạch toàn bộ 5 container
-    $DOCKER_COMPOSE down 2>/dev/null || true
+    # Khởi động toàn bộ 5 dịch vụ qua compose (proxy 80/8080, web 3000, postgres 5432, redis 6379, decoys 21/2222)
     $DOCKER_COMPOSE up -d --build
 
     log_info "Đang chờ PostgreSQL khởi động và sẵn sàng nhận kết nối..."
@@ -231,7 +230,7 @@ start_services_and_seed() {
         log_error "Không thể kết nối đến PostgreSQL sau ${MAX_RETRIES} giây."
         exit 1
     fi
-    log_success "PostgreSQL Database đã sẵn sàng hoạt động!"
+    log_success "Hạ tầng Database, Nginx & Decoys (21, 80, 2222, 3000, 5432, 6379, 8080) đã sẵn sàng!"
 
     # Cài đặt dependencies và nạp dữ liệu
     if command -v npm &> /dev/null; then
@@ -244,13 +243,7 @@ start_services_and_seed() {
         log_info "Nạp dữ liệu mẫu (Seed accounts, courses, syllabus)..."
         npx prisma db seed
         log_success "Nạp dữ liệu Database mẫu hoàn tất!"
-    else
-        log_info "Đồng bộ hóa Prisma Schema bên trong Container..."
-        docker exec curator-web npx prisma db push --accept-data-loss
-        docker exec curator-web npx prisma db seed
-        log_success "Nạp dữ liệu Database mẫu hoàn tất!"
     fi
-    log_success "Toàn bộ hệ thống Web (Port 80 & 3000) và các cổng bẫy Decoys đã sẵn sàng 100%!"
 }
 
 print_summary() {
