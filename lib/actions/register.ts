@@ -1,12 +1,6 @@
 "use server";
 
-import { PrismaClient } from "@prisma/client";
-import { Pool } from "pg";
-import { PrismaPg } from "@prisma/adapter-pg";
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+import { prisma } from "@/lib/prisma";
 
 export async function registerAccount(formData: FormData) {
   try {
@@ -31,12 +25,11 @@ export async function registerAccount(formData: FormData) {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    // Create user and ENFORCE STUDENT role
     await prisma.user.create({
       data: {
         email,
         passwordHash,
-        role: "STUDENT", // ENFORCED ROLE
+        role: "STUDENT",
       },
     });
 

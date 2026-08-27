@@ -1,0 +1,8 @@
+Contact: mailto:security-disclosure@academic-curator.edu
+Encryption: https://academic-curator.edu/pgp-key.txt
+Acknowledgments: https://academic-curator.edu/security-hall-of-fame
+Preferred-Languages: en, vi
+Canonical: https://academic-curator.edu/.well-known/security.txt
+Policy: https://academic-curator.edu/responsible-disclosure-policy
+Hiring: https://academic-curator.edu/careers/security-engineering
+Expires: 2027-12-31T23:59:59.000Z

@@ -1,0 +1,13 @@
+# Academic Curator Institutional LMS - Web Crawler Directives
+User-agent: *
+Disallow: /admin/
+Disallow: /api/internal/
+Disallow: /api/v1/private/
+Disallow: /curriculum/drafts/
+Disallow: /cdn-cgi/
+Disallow: /backup/
+Disallow: /debug/
+Disallow: /restricted/
+
+# Sitemap Location
+Sitemap: http://localhost:3000/sitemap.xml

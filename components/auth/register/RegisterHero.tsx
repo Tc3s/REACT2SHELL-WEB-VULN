@@ -23,7 +23,7 @@ export default function RegisterHero() {
         </h2>
 
         <p className="text-white/90 text-lg max-w-md">
-          Join thousands of students and faculty members in the world's most
+          Join thousands of students and faculty members in the world&apos;s most
           sophisticated educational publication environment.
         </p>
 

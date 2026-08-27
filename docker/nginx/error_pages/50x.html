@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>502 Bad Gateway — The Academic Curator</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        body { background: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 2rem; }
+        .card { background: #1e293b; border: 1px solid #334155; border-radius: 1.5rem; max-width: 600px; width: 100%; padding: 2.5rem; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); }
+        .badge { display: inline-flex; align-items: center; gap: 0.5rem; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin-bottom: 1.5rem; }
+        h1 { font-size: 1.75rem; font-weight: 800; margin-bottom: 0.75rem; color: #ffffff; }
+        p { color: #94a3b8; font-size: 0.95rem; line-height: 1.6; margin-bottom: 1.5rem; }
+        .diagnostics { background: #0f172a; border: 1px solid #334155; border-radius: 0.75rem; padding: 1rem; font-family: ui-monospace, monospace; font-size: 0.8rem; color: #cbd5e1; margin-bottom: 1.5rem; }
+        .footer { font-size: 0.75rem; color: #64748b; border-top: 1px solid #334155; padding-top: 1rem; display: flex; justify-content: space-between; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="badge">Gateway Error • 502</div>
+        <h1>Upstream Application Unreachable</h1>
+        <p>The Academic Curator reverse proxy was unable to establish a connection with the backend Node.js application server. The service may be starting up or undergoing maintenance.</p>
+        <div class="diagnostics">
+            <div>Server: nginx/1.24.0 (Ubuntu)</div>
+            <div>Upstream: nextjs_upstream (web:3000)</div>
+            <div>Error: Connection Refused / Timeout</div>
+        </div>
+        <div class="footer">
+            <span>Academic Curator Edge Gateway</span>
+            <span>Incident Logged</span>
+        </div>
+    </div>
+</body>
+</html>

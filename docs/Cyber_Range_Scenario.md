@@ -1,8 +1,9 @@
 # 🛡️ Kịch Bản Diễn Tập Cyber Range: React2Shell (The Academic Curator)
 
-## 1. TỔNG QUAN KỊCH BẢN
+## 1. TỔNG QUAN KỊCH BẢN DIỄN TẬP
 
 Kịch bản diễn tập mô phỏng cuộc tấn công Red Team có chủ đích vào nền tảng giáo dục điện tử **The Academic Curator** được xây dựng trên kiến trúc Next.js 15.0.3 App Router và React Server Components (RSC):
+
 1. **Initial Access**: Đăng ký hoặc thu thập phiên sinh viên (`STUDENT`) thông qua NextAuth v5.
 2. **Privilege Escalation**: Khai thác kết hợp **IDOR** và **Mass Assignment** trên Server Action cập nhật hồ sơ `updateUserProfile` để leo thang đặc quyền lên `LECTURER`.
 3. **Framework-level RCE (React2Shell / CVE-2025-55182)**: Khai thác cơ chế Insecure Deserialization của React Server Components Flight Protocol (`requireModule` / prototype traversal) tại Server Action `createAssignment` để thực thi mã tùy ý (RCE) trên tiến trình Node.js.
@@ -11,21 +12,22 @@ Kịch bản diễn tập mô phỏng cuộc tấn công Red Team có chủ đí
 
 ---
 
-## 2. BẢNG ÁNH XẠ MITRE ATT&CK & DẤU HIỆU NHẬN BIẾT
+## 2. BẢNG ÁNH XẠ MITRE ATT&CK & DẤU HIỆU NHẬN BIẾT (BLUE TEAM TELEMETRY)
 
 | Giai đoạn | Kỹ thuật MITRE ATT&CK | Hành động của Red Team | Dấu hiệu Nhận biết (Blue Team / SIEM) |
 |---|---|---|---|
-| **1. Recon & Initial Access** | Active Scanning (`T1595`), Valid Accounts (`T1078`) | Quét cổng, nhận diện Next.js 15 / React 19 RC; Đăng nhập sinh viên qua `/api/auth/callback/credentials`. | HTTP POST `/api/auth/callback/credentials`; Cookie `authjs.session-token` được cấp cho tài khoản sinh viên. |
-| **2. Privilege Escalation** | Exploitation for Privilege Escalation (`T1068`) | Gửi payload cập nhật hồ sơ chứa `"role": "LECTURER"` qua Server Action `updateUserProfile` (Action ID: `0003834f...`). Đăng nhập lại lấy JWT mới. | Cột `role` trong bảng `User` bị thay đổi trực tiếp từ `STUDENT` sang `LECTURER`. Lưu lượng POST mang header `Next-Action: 0003834fbecc7cc1359c9730a8fda880e2b5306d07`. |
-| **3. Framework RCE (React2Shell)** | Exploit Public-Facing Application (`T1190`), Command & Scripting Interpreter (`T1059.004`) | Gửi Flight Protocol payload qua Server Action `createAssignment` (Action ID: `408c92d5...`), kích hoạt prototype traversal `$2:constructor:constructor` để thực thi lệnh OS. | HTTP POST multipart/form-data chứa header `Next-Action: 408c92d53a78edb220ec3787802802d39f9d02e4cf` và body chứa chuỗi `constructor:constructor`, `$F1`. Tiến trình `node` sinh ra tiến trình con (`sh`, `bash`, `uname`, `cat`). |
-| **4. Internal Recon & Pivoting** | Credentials from Password Stores (`T1555`), Internal Proxy (`T1090.001`) | Đọc file `.env` thu thập `AUTH_SECRET`, `DATABASE_URL`, `DB_USER`, `DB_PASS`; Kết nối vào container database nội bộ `elearning-db:5432`. | Tiến trình `node` đọc tệp `.env`. Kết nối TCP nội bộ từ Web Server (`172.18.0.x`) đến Database (`elearning-db:5432`) với lưu lượng bất thường. |
-| **5. Exfiltration & Persistence** | Data from Local System (`T1005`), Data Encrypted for Impact (`T1486`) | Dump toàn bộ bảng `User` và `Assignment` từ PostgreSQL; Trích xuất password hash của quản trị viên. | Truy vấn `SELECT * FROM "User"` hàng loạt qua kết nối trực tiếp; Lưu lượng dữ liệu lớn được truyền tải ra ngoài. |
+| **1. Recon & Decoy Discovery** | Active Scanning (`T1595`), Service Discovery (`T1046`) | Quét cổng qua Nmap; gặp các cổng decoy 21 (FTP), 2222 (SSH), 6379 (Redis), 8080 (Actuator). Xác định web chính tại cổng 80/3000. | Lưu lượng TCP SYN quét cổng hàng loạt; Các yêu cầu kết nối FTP/SSH/Redis bị từ chối; Request tới `/robots.txt`, `/.well-known/security.txt`. |
+| **2. Initial Access** | Valid Accounts (`T1078`), Automated Authentication | Đăng nhập sinh viên qua `/api/auth/callback/credentials`. Trích xuất CUID từ `/student/settings`. | HTTP POST `/api/auth/callback/credentials`; Cookie `authjs.session-token` được cấp cho tài khoản sinh viên `student@elearning.com`. |
+| **3. Privilege Escalation** | Exploitation for Privilege Escalation (`T1068`) | Gửi payload cập nhật hồ sơ chứa `"role": "LECTURER"` qua Server Action `updateUserProfile` (Action ID: `0003834f...`). Đăng nhập lại lấy JWT mới. | Cột `role` trong bảng `User` bị thay đổi trực tiếp từ `STUDENT` sang `LECTURER`. Lưu lượng POST mang header `Next-Action: 0003834fbecc7cc1359c9730a8fda880e2b5306d07`. |
+| **4. Framework RCE (React2Shell)** | Exploit Public-Facing Application (`T1190`), Command & Scripting Interpreter (`T1059.004`) | Gửi Flight Protocol payload qua Server Action `createAssignment` (Action ID: `408c92d5...`), kích hoạt prototype traversal `$2:constructor:constructor` để thực thi lệnh OS. | HTTP POST multipart/form-data chứa header `Next-Action: 408c92d53a78edb220ec3787802802d39f9d02e4cf` và body chứa chuỗi `constructor:constructor`, `$F1`. Tiến trình `node` sinh ra tiến trình con (`sh`, `bash`, `uname`, `cat`). |
+| **5. Internal Recon & Pivoting** | Credentials from Password Stores (`T1555`), Internal Proxy (`T1090.001`) | Đọc file `.env` thu thập `AUTH_SECRET`, `DATABASE_URL`, `DB_USER`, `DB_PASS`; Kết nối vào container database nội bộ `elearning-db:5432`. | Tiến trình `node` đọc tệp `.env`. Kết nối TCP nội bộ từ Web Server đến Database (`elearning-db:5432`) với lưu lượng bất thường. |
+| **6. Exfiltration & Impact** | Data from Local System (`T1005`), Data Encrypted for Impact (`T1486`) | Dump toàn bộ bảng `User` và `Assignment` từ PostgreSQL; Trích xuất password hash của quản trị viên. | Truy vấn `SELECT * FROM "User"` hàng loạt qua kết nối trực tiếp; Lưu lượng dữ liệu lớn được truyền tải ra ngoài. |
 
 ---
 
 ## 3. QUY TẮC PHÁT HIỆN DÀNH CHO BLUE TEAM (DETECTION ENGINEERING)
 
-### 3.1 Sigma Rule: Phát hiện Khai thác React2Shell qua Flight Stream
+### 3.1. Sigma Rule: Phát hiện Khai thác React2Shell qua Flight Stream
 ```yaml
 title: React Server Components Flight Deserialization Exploit (CVE-2025-55182)
 id: 8421e71f-029c-4a75-8480-react2shell
@@ -57,7 +59,7 @@ tags:
     - attack.t1059.004
 ```
 
-### 3.2 Suricata / Snort WAF Rule
+### 3.2. Suricata / Snort WAF Rule
 ```suricata
 alert http any any -> any $HTTP_PORTS (
     msg:"EXPLOIT React Server Components Insecure Deserialization (CVE-2025-55182)";
@@ -79,6 +81,7 @@ alert http any any -> any $HTTP_PORTS (
   - Header HTTP `Next-Action`:
     - `0003834fbecc7cc1359c9730a8fda880e2b5306d07` (`updateUserProfile`)
     - `408c92d53a78edb220ec3787802802d39f9d02e4cf` (`createAssignment`)
+  - Truy cập bất thường vào các cổng Honeypot: 21 (FTP), 2222 (SSH), 6379 (Redis), 8080 (Actuator).
 - **Host / Process IoCs**:
   - Tiến trình cha `node / next-server` sinh ra các tiến trình con `sh`, `bash`, `id`, `whoami`, `cat .env`.
   - Thao tác mở file descriptor đọc `.env` từ các worker thread bất thường.

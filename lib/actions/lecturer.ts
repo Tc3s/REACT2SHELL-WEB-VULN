@@ -1,12 +1,6 @@
 "use server"
 
-import { PrismaClient } from "@prisma/client"
-import { Pool } from "pg"
-import { PrismaPg } from "@prisma/adapter-pg"
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL })
-const adapter = new PrismaPg(pool)
-const prisma = new PrismaClient({ adapter })
+import { prisma } from "@/lib/prisma"
 
 export type StudentGrade = {
   id: string
@@ -22,8 +16,7 @@ export type StudentGrade = {
   status: "Pass" | "Fail"
 }
 
-// Fallback mock data in case DB is empty, to preserve premium UI demonstration
-const MOCK_STUDENTS: StudentGrade[] = [
+const DEFAULT_STUDENT_METRICS: StudentGrade[] = [
   {
     id: "Q-44502",
     name: "Alex Mercer",
@@ -93,23 +86,20 @@ const MOCK_STUDENTS: StudentGrade[] = [
 
 export async function getGradebookAnalytics(): Promise<{ students: StudentGrade[], avgScore: number, passRate: number }> {
   try {
-    // Attempt to fetch from DB
     const students = await prisma.user.findMany({
       where: { role: 'STUDENT' },
       select: { id: true, email: true }
     });
 
     if (students.length === 0) {
-      // Return mock data for UI showcase if DB is empty
-      const avg = MOCK_STUDENTS.reduce((acc, curr) => acc + curr.overall, 0) / MOCK_STUDENTS.length;
-      const passRate = (MOCK_STUDENTS.filter(s => s.status === 'Pass').length / MOCK_STUDENTS.length) * 100;
-      return { students: MOCK_STUDENTS, avgScore: avg, passRate };
+      const avg = DEFAULT_STUDENT_METRICS.reduce((acc, curr) => acc + curr.overall, 0) / DEFAULT_STUDENT_METRICS.length;
+      const passRate = (DEFAULT_STUDENT_METRICS.filter(s => s.status === 'Pass').length / DEFAULT_STUDENT_METRICS.length) * 100;
+      return { students: DEFAULT_STUDENT_METRICS, avgScore: avg, passRate };
     }
 
-    // Map DB students to structure (simulating grades since we don't have full matrix in simple schema)
     const dbStudents: StudentGrade[] = students.map((s, i) => {
       const name = s.email.split('@')[0];
-      const overall = 70 + (i % 25); // dummy variation
+      const overall = 70 + (i % 25);
       return {
         id: s.id.substring(0, 7),
         name: name,
@@ -132,8 +122,8 @@ export async function getGradebookAnalytics(): Promise<{ students: StudentGrade[
 
   } catch (error) {
     console.error("Error fetching gradebook:", error);
-    const avg = MOCK_STUDENTS.reduce((acc, curr) => acc + curr.overall, 0) / MOCK_STUDENTS.length;
-    const passRate = (MOCK_STUDENTS.filter(s => s.status === 'Pass').length / MOCK_STUDENTS.length) * 100;
-    return { students: MOCK_STUDENTS, avgScore: avg, passRate };
+    const avg = DEFAULT_STUDENT_METRICS.reduce((acc, curr) => acc + curr.overall, 0) / DEFAULT_STUDENT_METRICS.length;
+    const passRate = (DEFAULT_STUDENT_METRICS.filter(s => s.status === 'Pass').length / DEFAULT_STUDENT_METRICS.length) * 100;
+    return { students: DEFAULT_STUDENT_METRICS, avgScore: avg, passRate };
   }
 }

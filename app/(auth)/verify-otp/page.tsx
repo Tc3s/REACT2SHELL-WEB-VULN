@@ -23,7 +23,7 @@ export default function VerifyOTPPage() {
           </h1>
 
           <p className="text-gray-500 text-center max-w-sm">
-            We've sent a 6-digit verification code to your email.
+            We&apos;ve sent a 6-digit verification code to your email.
           </p>
 
         </div>

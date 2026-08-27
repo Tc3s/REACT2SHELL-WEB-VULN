@@ -1,12 +1,6 @@
 import StatsCards from "../components/StatsCards"
-import { PrismaClient } from "@prisma/client"
-import { Pool } from "pg"
-import { PrismaPg } from "@prisma/adapter-pg"
 import { connection } from "next/server"
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL })
-const adapter = new PrismaPg(pool)
-const prisma = new PrismaClient({ adapter })
+import { prisma } from "@/lib/prisma"
 
 export default async function AdminDashboard() {
   await connection();

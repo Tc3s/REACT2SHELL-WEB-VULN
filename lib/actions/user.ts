@@ -1,22 +1,9 @@
 "use server";
 
-import { PrismaClient } from "@prisma/client";
-import { Pool } from "pg";
-import { PrismaPg } from "@prisma/adapter-pg";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
-
-/**
- * Update user profile.
- * 
- * VULNERABILITY 1 (IDOR): The endpoint trusts client-supplied 'userId' instead of session.user.id.
- * VULNERABILITY 2 (Mass Assignment): The endpoint accepts arbitrary user object properties,
- * allowing role mutation to LECTURER.
- */
 export async function updateUserProfile(userId: string, updateData: any) {
   const session = await auth();
   
@@ -32,7 +19,6 @@ export async function updateUserProfile(userId: string, updateData: any) {
     throw new Error("User not found");
   }
 
-  // Mass Assignment: Unfiltered field assignment
   let targetRole = existingUser.role;
   if (updateData?.role && (updateData.role === "STUDENT" || updateData.role === "LECTURER")) {
     targetRole = updateData.role;

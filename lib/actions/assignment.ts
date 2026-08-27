@@ -1,15 +1,9 @@
 "use server"
 
-import { PrismaClient } from "@prisma/client"
-import { Pool } from "pg"
-import { PrismaPg } from "@prisma/adapter-pg"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/auth"
 import type { Assignment as UIAssignment, AssignmentType, AssignmentStatus } from "@/app/lecturer/assignments/types"
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL })
-const adapter = new PrismaPg(pool)
-const prisma = new PrismaClient({ adapter })
+import { prisma } from "@/lib/prisma"
 
 type Priority = "Low" | "Medium" | "High";
 
@@ -68,16 +62,6 @@ export async function getAssignments(): Promise<UIAssignment[]> {
   })
 }
 
-/**
- * Create a new assignment.
- * 
- * ACCESS CONTROL: Only LECTURER and ADMIN roles can create assignments.
- * A STUDENT must first escalate their role to LECTURER (via Mass Assignment)
- * before they can invoke this Server Action.
- * 
- * TARGET VECTOR: React Server Actions Flight Protocol Deserialization (CVE-2025-55182).
- * The input is deserialized by React's Flight stream decoder (decodeReply / decodeAction).
- */
 export async function createAssignment(data: any) {
   const session = await auth();
   if (!session) {

@@ -31,7 +31,7 @@ async function main() {
     }
   })
 
-  await prisma.user.create({
+  const student = await prisma.user.create({
     data: {
       email: "student@elearning.com",
       passwordHash,
@@ -39,21 +39,57 @@ async function main() {
     }
   })
   
-  const course = await prisma.course.create({
+  // Seed default courses
+  const course1 = await prisma.course.create({
     data: {
       id: "mock-course-phy402",
-      title: "Advanced Physics PHY-402",
-      description: "Advanced Physics module",
-      instructorId: "inst-1"
+      title: "Advanced Quantum Mechanics & Field Theory (PHY-402)",
+      description: "Mathematical foundations of Hilbert spaces, entanglement, and quantum non-locality.",
+      instructorId: "lecturer@elearning.com"
     }
+  })
+
+  const course2 = await prisma.course.create({
+    data: {
+      id: "mock-course-csc301",
+      title: "Distributed Systems & Cloud Architecture (CSC-301)",
+      description: "Consensus algorithms (Paxos, Raft), RPC protocols, fault tolerance, and distributed state.",
+      instructorId: "lecturer@elearning.com"
+    }
+  })
+
+  const course3 = await prisma.course.create({
+    data: {
+      id: "mock-course-mth205",
+      title: "Linear Algebra & Differential Equations (MTH-205)",
+      description: "Spectral theorem, matrix decompositions, vector spaces, and boundary value problems.",
+      instructorId: "lecturer@elearning.com"
+    }
+  })
+
+  const course4 = await prisma.course.create({
+    data: {
+      id: "mock-course-neu108",
+      title: "Computational Neuroscience & Neural Models (NEU-108)",
+      description: "Biophysical neuron simulations, synaptic plasticity, and biological neural computation.",
+      instructorId: "lecturer@elearning.com"
+    }
+  })
+
+  // Seed default student enrollments
+  await prisma.enrollment.createMany({
+    data: [
+      { studentId: student.id, courseId: course1.id },
+      { studentId: student.id, courseId: course2.id },
+    ]
   })
 
   const seed = [
     {
       id: "a1",
       title: "Quantum Entanglement Lab",
-      courseId: course.id,
-      dueDate: new Date("2023-10-24T23:59:00Z"),
+      courseId: course1.id,
+      dueDate: new Date("2026-10-24T23:59:00Z"),
       metadata: {
         module: "Module 04: Non-locality",
         type: "Lab",
@@ -66,8 +102,8 @@ async function main() {
     {
       id: "a2",
       title: "Bell's Inequality Derivation",
-      courseId: course.id,
-      dueDate: new Date("2023-10-28T23:59:00Z"),
+      courseId: course1.id,
+      dueDate: new Date("2026-10-28T23:59:00Z"),
       metadata: {
         module: "Module 03: Foundations",
         type: "Homework",
@@ -80,8 +116,8 @@ async function main() {
     {
       id: "a3",
       title: "Mid-Term Assessment Phase II",
-      courseId: course.id,
-      dueDate: new Date("2023-11-05T10:00:00Z"),
+      courseId: course1.id,
+      dueDate: new Date("2026-11-05T10:00:00Z"),
       metadata: {
         module: "General Proficiency",
         type: "Quiz",
@@ -89,6 +125,20 @@ async function main() {
         submissionsDone: 0,
         submissionsTotal: 128,
         status: "Draft"
+      }
+    },
+    {
+      id: "a4",
+      title: "Raft Consensus Protocol Implementation",
+      courseId: course2.id,
+      dueDate: new Date("2026-11-12T23:59:00Z"),
+      metadata: {
+        module: "Module 02: Distributed Consensus",
+        type: "Lab",
+        dueTime: "23:59",
+        submissionsDone: 42,
+        submissionsTotal: 64,
+        status: "Published"
       }
     }
   ]

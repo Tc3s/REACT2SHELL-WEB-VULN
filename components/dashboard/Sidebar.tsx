@@ -15,6 +15,7 @@ export default function Sidebar({ role }: Props) {
     admin: [
       { name: "Dashboard", icon: "dashboard", path: "/admin/dashboard" },
       { name: "Users", icon: "group", path: "/admin/users" },
+      { name: "Courses", icon: "school", path: "/admin/courses" },
     ],
 
     lecturer: [

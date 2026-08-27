@@ -1,10 +1,5 @@
 import type { NextAuthConfig } from "next-auth"
 
-/**
- * Edge-compatible auth config (no Node.js-only imports).
- * Used by middleware to validate sessions without importing pg/bcrypt.
- * Full provider config with DB logic lives in auth.ts.
- */
 export const authConfig = {
   pages: {
     signIn: "/login",
@@ -12,11 +7,20 @@ export const authConfig = {
   callbacks: {
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user
-      const isPublicRoute = nextUrl.pathname === "/login" || nextUrl.pathname === "/" || nextUrl.pathname === "/register"
+      const isPublicRoute =
+        nextUrl.pathname === "/login" ||
+        nextUrl.pathname === "/" ||
+        nextUrl.pathname === "/register" ||
+        nextUrl.pathname === "/forgot-password" ||
+        nextUrl.pathname === "/reset-password" ||
+        nextUrl.pathname === "/verify-otp" ||
+        nextUrl.pathname === "/robots.txt" ||
+        nextUrl.pathname === "/sitemap.xml" ||
+        nextUrl.pathname.startsWith("/.well-known")
       const role = (auth?.user as { role?: string })?.role
 
       if (isPublicRoute) {
-        if (isLoggedIn) {
+        if (isLoggedIn && (nextUrl.pathname === "/login" || nextUrl.pathname === "/" || nextUrl.pathname === "/register")) {
           if (role === "STUDENT") return Response.redirect(new URL("/student/dashboard", nextUrl))
           if (role === "LECTURER") return Response.redirect(new URL("/lecturer/dashboard", nextUrl))
           return Response.redirect(new URL("/admin/dashboard", nextUrl))
@@ -54,5 +58,5 @@ export const authConfig = {
       return session
     },
   },
-  providers: [], // Providers added in auth.ts with full DB config
+  providers: [],
 } satisfies NextAuthConfig

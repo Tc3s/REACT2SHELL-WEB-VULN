@@ -29,7 +29,7 @@ export default function OTPCard() {
       <div className="flex flex-col items-center gap-2">
 
         <span className="text-xs text-gray-400 uppercase font-bold tracking-widest">
-          Didn't receive a code?
+          Didn&apos;t receive a code?
         </span>
 
         <button

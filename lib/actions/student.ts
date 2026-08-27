@@ -1,18 +1,9 @@
 "use server";
 
-import { PrismaClient } from "@prisma/client";
-import { Pool } from "pg";
-import { PrismaPg } from "@prisma/adapter-pg";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
-
-/**
- * Ensures the user is authenticated as STUDENT and returns their ID.
- */
 async function requireStudent() {
   const session = await auth();
   if (!session?.user?.id) {
@@ -24,10 +15,6 @@ async function requireStudent() {
   return session.user.id;
 }
 
-/**
- * Gets courses the student is enrolled in.
- * Auto-enrolls in mock courses if the student has no enrollments for demo purposes.
- */
 export async function getStudentCourses() {
   const studentId = await requireStudent();
 
@@ -35,7 +22,6 @@ export async function getStudentCourses() {
     where: { studentId },
   });
 
-  // Demo auto-enrollment if none exist
   if (enrollments.length === 0) {
     const courses = await prisma.course.findMany({ take: 2 });
     for (const course of courses) {
@@ -51,7 +37,6 @@ export async function getStudentCourses() {
     });
   }
 
-  // Fetch actual course details
   const courseIds = enrollments.map((e) => e.courseId);
   const enrolledCourses = await prisma.course.findMany({
     where: {
@@ -62,13 +47,9 @@ export async function getStudentCourses() {
   return enrolledCourses;
 }
 
-/**
- * Gets assignments for a specific course, including the student's latest submission status if any.
- */
 export async function getStudentAssignments(courseId?: string) {
   const studentId = await requireStudent();
 
-  // If courseId is not provided, fetch assignments for all enrolled courses
   let courseIds = [courseId].filter(Boolean) as string[];
   if (courseIds.length === 0) {
     const enrollments = await prisma.enrollment.findMany({ where: { studentId } });
@@ -85,9 +66,6 @@ export async function getStudentAssignments(courseId?: string) {
   return assignments;
 }
 
-/**
- * Gets assignment details and the user's submission history.
- */
 export async function getAssignmentDetails(assignmentId: string) {
   const studentId = await requireStudent();
 
@@ -108,9 +86,6 @@ export async function getAssignmentDetails(assignmentId: string) {
   return { assignment, submissions };
 }
 
-/**
- * Submits an assignment.
- */
 export async function submitAssignment(assignmentId: string, fileUrl: string) {
   const studentId = await requireStudent();
 
